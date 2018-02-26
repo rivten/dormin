@@ -416,3 +416,10 @@ bool Pressed(button_state Button)
 	bool Result = (Button.IsDown && (!Button.WasDown));
 	return(Result);
 }
+
+bool KeyPressed(game_input* Input, u32 Scancode)
+{
+	Assert(Scancode <= ArrayCount(Input->Keyboard.Buttons));
+	bool Result = Pressed(Input->Keyboard.Buttons[Scancode]);
+	return(Result);
+}

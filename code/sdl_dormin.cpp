@@ -34,6 +34,72 @@ SDLSetRenderDrawColorV4(SDL_Renderer* Renderer, v4 V)
 	SDL_SetRenderDrawColor(Renderer, R, G, B, A);
 }
 
+internal u32
+SafeCastToU32(s32 Value)
+{
+	Assert(Value >= 0);
+	u32 Result = u32(Value);
+	return(Result);
+}
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
+struct bitmap
+{
+	u32 Width;
+	u32 Height;
+	u32 Depth;
+	void* Data;
+};
+
+bitmap LoadBitmap(char* Filename)
+{
+	// TODO(hugo) : Load off an arena
+	bitmap Result = {};
+	s32 Depth = 0;
+	s32 Width = 0;
+	s32 Height = 0;
+	Result.Data = stbi_load(Filename, &Width, &Height, &Depth, 4);
+	Assert(Result.Data);
+
+	Result.Width = SafeCastToU32(Width);
+	Result.Height = SafeCastToU32(Height);
+	Result.Depth = SafeCastToU32(Depth);
+	Assert(Result.Width > 0);
+	Assert(Result.Height > 0);
+
+	return(Result);
+}
+
+void FreeBitmap(bitmap Bitmap)
+{
+	stbi_image_free(Bitmap.Data);
+}
+
+internal SDL_Texture*
+SDLCreateTextureFromBitmap(SDL_Renderer* Renderer, bitmap Bitmap)
+{
+	u32 Pitch = Bitmap.Width * 4;
+	u32 RMask = 0x00FF0000;
+	u32 GMask = 0x0000FF00;
+	u32 BMask = 0x000000FF;
+	u32 AMask = 0xFF000000;
+
+	SDL_Surface* Surface =
+		SDL_CreateRGBSurfaceFrom(Bitmap.Data,
+				Bitmap.Width, Bitmap.Height,
+				32, Pitch,
+				RMask, GMask, BMask, AMask);
+	Assert(Surface);
+
+	SDL_Texture* Result = SDL_CreateTextureFromSurface(Renderer, Surface);
+	Assert(Result);
+
+	SDL_FreeSurface(Surface);
+	return(Result);
+}
+
 #include "dormin.cpp"
 
 int main(int ArgumentCount, char** Arguments)
