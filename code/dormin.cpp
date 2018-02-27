@@ -6,11 +6,53 @@ struct game_state
 {
 	SDL_Texture* BitmapTexture;
 
+	u8 StaticWorld[32 * 32];
+
 	u8 TileX;
 	u8 TileY;
 
 	b8 IsInitialised;
 };
+
+internal void
+CreateStaticWorld(u8* World)
+{
+	for(u32 WorldY = 0; WorldY < 32; ++WorldY)
+	{
+		for(u32 WorldX = 0; WorldX < 32; ++WorldX)
+		{
+			u8* WorldTile = World + (WorldX + 32 * WorldY);
+			*WorldTile = 0;
+			if(WorldX == 0 || WorldX == 31 ||
+					WorldY == 0 || WorldY == 31)
+			{
+				*WorldTile = 1;
+			}
+		}
+	}
+}
+
+internal void
+RenderStaticWorld(SDL_Renderer* Renderer, u8* World)
+{
+	for(u32 WorldY = 0; WorldY < 32; ++WorldY)
+	{
+		for(u32 WorldX = 0; WorldX < 32; ++WorldX)
+		{
+			u8 WorldTile = World[WorldX + WorldY * 32];
+			if(WorldTile == 1)
+			{
+				SDL_Rect WallRect = {};
+				WallRect.x = WorldX * 16;
+				WallRect.y = WorldY * 16 + 3;
+				WallRect.w = 16;
+				WallRect.h = 13;
+				SDL_SetRenderDrawColor(Renderer, 125, 119, 112, 255);
+				SDL_RenderFillRect(Renderer, &WallRect);
+			}
+		}
+	}
+}
 
 internal void
 GameUpdateAndRender(game_memory* Memory,
@@ -24,33 +66,46 @@ GameUpdateAndRender(game_memory* Memory,
 		bitmap Bitmap = LoadBitmap(DATA_FOLDER("Bisasam_16x16.png"));
 		GameState->BitmapTexture = SDLCreateTextureFromBitmap(Renderer, Bitmap);
 
-		GameState->TileX = 0;
-		GameState->TileY = 0;
+		GameState->TileX = 1;
+		GameState->TileY = 1;
+
+		CreateStaticWorld(GameState->StaticWorld);
 
 		GameState->IsInitialised = true;
 	}
 
+	v2i PlayerIntent = {};
+
 	if(KeyPressed(Input, SCANCODE_UP))
 	{
-		--GameState->TileY;
+		--PlayerIntent.y;
 	}
 	if(KeyPressed(Input, SCANCODE_DOWN))
 	{
-		++GameState->TileY;
+		++PlayerIntent.y;
 	}
 	if(KeyPressed(Input, SCANCODE_LEFT))
 	{
-		--GameState->TileX;
+		--PlayerIntent.x;
 	}
 	if(KeyPressed(Input, SCANCODE_RIGHT))
 	{
-		++GameState->TileX;
+		++PlayerIntent.x;
+	}
+
+	v2i PlayerIntendedP = V2i(GameState->TileX, GameState->TileY) + PlayerIntent;
+	if(GameState->StaticWorld[PlayerIntendedP.x + 32 * PlayerIntendedP.y] == 0)
+	{
+		GameState->TileX = PlayerIntendedP.x;
+		GameState->TileY = PlayerIntendedP.y;
 	}
 
 	// NOTE(hugo): Render
 	// {
 	SDL_SetRenderDrawColor(Renderer, 36, 36, 36, 255);
 	SDL_RenderClear(Renderer);
+
+	RenderStaticWorld(Renderer, GameState->StaticWorld);
 
 	SDL_Rect AtTile = {};
 	AtTile.x = 32;
