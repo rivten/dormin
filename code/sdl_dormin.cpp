@@ -15,8 +15,11 @@
 typedef bool b8;
 
 global_variable b8 GlobalRunning = true;
-const global_variable u32 GlobalWindowWidth = 512;
-const global_variable u32 GlobalWindowHeight = 512;
+const global_variable u32 GlobalTileSize = 16;
+const global_variable u32 GlobalWindowTileCountX = 32;
+const global_variable u32 GlobalWindowTileCountY = 34;
+const global_variable u32 GlobalWindowWidth = GlobalTileSize * GlobalWindowTileCountX;
+const global_variable u32 GlobalWindowHeight = GlobalTileSize * GlobalWindowTileCountY;
 
 struct game_memory
 {
