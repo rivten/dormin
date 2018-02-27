@@ -57,7 +57,8 @@ RenderStaticWorld(SDL_Renderer* Renderer, u8* World)
 internal void
 SDLWriteText(SDL_Renderer* Renderer,
 		SDL_Texture* BitmapTexture, char* Str,
-		u32 StartTileX, u32 StartTileY)
+		u32 StartTileX, u32 StartTileY,
+		v4 Color)
 {
 	u32 CharTileX = StartTileX;
 	for(char* C = Str; *C; ++C)
@@ -78,6 +79,7 @@ SDLWriteText(SDL_Renderer* Renderer,
 		DstRect.w = GlobalTileSize;
 		DstRect.h = GlobalTileSize;
 
+		SDLSetTextureColorMode(BitmapTexture, Color);
 		SDL_RenderCopy(Renderer, BitmapTexture, &SrcRect, &DstRect);
 
 		++CharTileX;
@@ -137,8 +139,10 @@ GameUpdateAndRender(game_memory* Memory,
 
 	RenderStaticWorld(Renderer, GameState->StaticWorld);
 
-	SDLWriteText(Renderer, GameState->BitmapTexture, "Arrows : ", 0, 1);
+	SDLWriteText(Renderer, GameState->BitmapTexture, "Arrows : ", 0, 1, V4(1.0f, 1.0f, 1.0f, 1.0f));
 
+	// NOTE(hugo): Render player
+	// {
 	SDL_Rect AtTile = {};
 	AtTile.x = 32;
 	AtTile.y = 0;
@@ -151,7 +155,10 @@ GameUpdateAndRender(game_memory* Memory,
 	DestTile.w = GlobalTileSize;
 	DestTile.h = GlobalTileSize;
 
+	SDLSetTextureColorMode(GameState->BitmapTexture, V4(1.0f, 1.0f, 1.0f, 1.0f));
 	SDL_RenderCopy(Renderer, GameState->BitmapTexture, &AtTile, &DestTile);
+	// }
+
 
 	SDL_RenderPresent(Renderer);
 	// }

@@ -10,7 +10,7 @@
 
 #include "dormin_input.h"
 
-#define DORMIN_DEBUG 0
+#define DORMIN_DEBUG 1
 
 typedef bool b8;
 
@@ -101,6 +101,16 @@ SDLCreateTextureFromBitmap(SDL_Renderer* Renderer, bitmap Bitmap)
 
 	SDL_FreeSurface(Surface);
 	return(Result);
+}
+
+internal void
+SDLSetTextureColorMode(SDL_Texture* Texture, v4 Color)
+{
+	SDL_SetTextureColorMod(Texture,
+			u8(255.0f * Color.x),
+			u8(255.0f * Color.y),
+			u8(255.0f * Color.z));
+	SDL_SetTextureAlphaMod(Texture, u8(255.0f * Color.w));
 }
 
 #include "dormin.cpp"
