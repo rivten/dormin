@@ -2,6 +2,16 @@
 
 #define DATA_FOLDER(Path) "../data/" Path
 
+enum game_mode
+{
+	GameMode_Rogue,
+	GameMode_OptionMenu,
+
+	GameMode_Count,
+};
+
+// TODO(hugo): Cache friendly
+// ordering of members ?
 struct game_state
 {
 	SDL_Texture* BitmapTexture;
@@ -10,6 +20,8 @@ struct game_state
 
 	u8 TileX;
 	u8 TileY;
+
+	game_mode Mode;
 
 	b8 IsInitialised;
 };
@@ -102,6 +114,8 @@ GameUpdateAndRender(game_memory* Memory,
 		GameState->TileY = 1;
 
 		CreateStaticWorld(GameState->StaticWorld);
+		
+		GameState->Mode = GameMode_Rogue;
 
 		GameState->IsInitialised = true;
 	}
@@ -123,6 +137,22 @@ GameUpdateAndRender(game_memory* Memory,
 	if(KeyPressed(Input, SCANCODE_RIGHT))
 	{
 		++PlayerIntent.x;
+	}
+
+	if(KeyPressed(Input, SCANCODE_ESCAPE))
+	{
+		switch(GameState->Mode)
+		{
+			case GameMode_Rogue:
+				{
+					GameState->Mode = GameMode_OptionMenu;
+				} break;
+			case GameMode_OptionMenu:
+				{
+					GameState->Mode = GameMode_Rogue;
+				} break;
+			InvalidDefaultCase;
+		}
 	}
 
 	v2i PlayerIntendedP = V2i(GameState->TileX, GameState->TileY) + PlayerIntent;
@@ -157,6 +187,22 @@ GameUpdateAndRender(game_memory* Memory,
 
 	SDLSetTextureColorMode(GameState->BitmapTexture, V4(1.0f, 1.0f, 1.0f, 1.0f));
 	SDL_RenderCopy(Renderer, GameState->BitmapTexture, &AtTile, &DestTile);
+
+	if(GameState->Mode == GameMode_OptionMenu)
+	{
+		// NOTE(hugo): Render options
+		// {
+		SDL_Rect OptionBackgroundRect = {};
+		OptionBackgroundRect.x = 100;
+		OptionBackgroundRect.y = 100;
+		OptionBackgroundRect.w = 64;
+		OptionBackgroundRect.h = 64;
+
+		SDL_SetRenderDrawColor(Renderer, 73, 73, 73, 255);
+		SDL_RenderFillRect(Renderer, &OptionBackgroundRect);
+		// }
+	}
+
 	// }
 
 
