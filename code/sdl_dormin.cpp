@@ -10,7 +10,7 @@
 
 #include "dormin_input.h"
 
-#define DORMIN_DEBUG 0
+#define DORMIN_DEBUG 1
 
 typedef bool b8;
 
@@ -205,6 +205,14 @@ int main(int ArgumentCount, char** Arguments)
 		game_input* TempInput = NewInput;
 		NewInput = OldInput;
 		OldInput = TempInput;
+
+		for(u32 KeyIndex = 0;
+				KeyIndex < ArrayCount(NewInput->Keyboard.Buttons);
+				++KeyIndex)
+		{
+			NewInput->Keyboard.Buttons[KeyIndex].WasDown =
+				OldInput->Keyboard.Buttons[KeyIndex].IsDown;
+		}
 
 	}
 

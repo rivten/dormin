@@ -76,21 +76,45 @@ GameUpdateAndRender(game_memory* Memory,
 
 	v2i PlayerIntent = {};
 
-	if(KeyPressed(Input, SCANCODE_UP))
+	if(KeyPressed(Input, SCANCODE_UP) ||
+			KeyPressed(Input, SCANCODE_KP_8))
 	{
 		--PlayerIntent.y;
 	}
-	if(KeyPressed(Input, SCANCODE_DOWN))
+	if(KeyPressed(Input, SCANCODE_DOWN) ||
+			KeyPressed(Input, SCANCODE_KP_2))
 	{
 		++PlayerIntent.y;
 	}
-	if(KeyPressed(Input, SCANCODE_LEFT))
+	if(KeyPressed(Input, SCANCODE_LEFT) ||
+			KeyPressed(Input, SCANCODE_KP_4))
 	{
 		--PlayerIntent.x;
 	}
-	if(KeyPressed(Input, SCANCODE_RIGHT))
+	if(KeyPressed(Input, SCANCODE_RIGHT) ||
+			KeyPressed(Input, SCANCODE_KP_6))
 	{
 		++PlayerIntent.x;
+	}
+	if(KeyPressed(Input, SCANCODE_KP_1))
+	{
+		--PlayerIntent.x;
+		++PlayerIntent.y;
+	}
+	if(KeyPressed(Input, SCANCODE_KP_3))
+	{
+		++PlayerIntent.x;
+		++PlayerIntent.y;
+	}
+	if(KeyPressed(Input, SCANCODE_KP_7))
+	{
+		--PlayerIntent.x;
+		--PlayerIntent.y;
+	}
+	if(KeyPressed(Input, SCANCODE_KP_9))
+	{
+		++PlayerIntent.x;
+		--PlayerIntent.y;
 	}
 
 	v2i PlayerIntendedP = V2i(GameState->TileX, GameState->TileY) + PlayerIntent;
