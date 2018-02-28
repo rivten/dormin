@@ -2,6 +2,16 @@
 
 #define DATA_FOLDER(Path) "../data/" Path
 
+enum game_mode
+{
+	GameMode_Rogue,
+	GameMode_OptionMenu,
+
+	GameMode_Count,
+};
+
+// TODO(hugo): Cache friendly
+// ordering of members ?
 struct game_state
 {
 	SDL_Texture* BitmapTexture;
@@ -10,6 +20,8 @@ struct game_state
 
 	u8 TileX;
 	u8 TileY;
+
+	game_mode Mode;
 
 	b8 IsInitialised;
 };
@@ -43,14 +55,46 @@ RenderStaticWorld(SDL_Renderer* Renderer, u8* World)
 			if(WorldTile == 1)
 			{
 				SDL_Rect WallRect = {};
-				WallRect.x = WorldX * 16;
-				WallRect.y = WorldY * 16 + 3;
-				WallRect.w = 16;
-				WallRect.h = 13;
+				WallRect.x = WorldX * GlobalTileSize;
+				WallRect.y = (WorldY + 2) * GlobalTileSize + 3;
+				WallRect.w = GlobalTileSize;
+				WallRect.h = GlobalTileSize - 3;
 				SDL_SetRenderDrawColor(Renderer, 125, 119, 112, 255);
 				SDL_RenderFillRect(Renderer, &WallRect);
 			}
 		}
+	}
+}
+
+internal void
+SDLWriteText(SDL_Renderer* Renderer,
+		SDL_Texture* BitmapTexture, char* Str,
+		u32 StartTileX, u32 StartTileY,
+		v4 Color)
+{
+	u32 CharTileX = StartTileX;
+	for(char* C = Str; *C; ++C)
+	{
+		u8 AsciiIndex = (u8)(*C);
+		u32 BitmapTileX = AsciiIndex % 16;
+		u32 BitmapTileY = AsciiIndex / 16;
+
+		SDL_Rect SrcRect = {};
+		SrcRect.x = GlobalTileSize * BitmapTileX;
+		SrcRect.y = GlobalTileSize * BitmapTileY;
+		SrcRect.w = GlobalTileSize;
+		SrcRect.h = GlobalTileSize;
+
+		SDL_Rect DstRect = {};
+		DstRect.x = GlobalTileSize * CharTileX;
+		DstRect.y = GlobalTileSize * StartTileY;
+		DstRect.w = GlobalTileSize;
+		DstRect.h = GlobalTileSize;
+
+		SDLSetTextureColorMode(BitmapTexture, Color);
+		SDL_RenderCopy(Renderer, BitmapTexture, &SrcRect, &DstRect);
+
+		++CharTileX;
 	}
 }
 
@@ -70,6 +114,8 @@ GameUpdateAndRender(game_memory* Memory,
 		GameState->TileY = 1;
 
 		CreateStaticWorld(GameState->StaticWorld);
+		
+		GameState->Mode = GameMode_Rogue;
 
 		GameState->IsInitialised = true;
 	}
@@ -117,6 +163,22 @@ GameUpdateAndRender(game_memory* Memory,
 		--PlayerIntent.y;
 	}
 
+	if(KeyPressed(Input, SCANCODE_ESCAPE))
+	{
+		switch(GameState->Mode)
+		{
+			case GameMode_Rogue:
+				{
+					GameState->Mode = GameMode_OptionMenu;
+				} break;
+			case GameMode_OptionMenu:
+				{
+					GameState->Mode = GameMode_Rogue;
+				} break;
+			InvalidDefaultCase;
+		}
+	}
+
 	v2i PlayerIntendedP = V2i(GameState->TileX, GameState->TileY) + PlayerIntent;
 	if(GameState->StaticWorld[PlayerIntendedP.x + 32 * PlayerIntendedP.y] == 0)
 	{
@@ -131,19 +193,42 @@ GameUpdateAndRender(game_memory* Memory,
 
 	RenderStaticWorld(Renderer, GameState->StaticWorld);
 
+	SDLWriteText(Renderer, GameState->BitmapTexture, "Arrows : ", 0, 1, V4(1.0f, 1.0f, 1.0f, 1.0f));
+
+	// NOTE(hugo): Render player
+	// {
 	SDL_Rect AtTile = {};
 	AtTile.x = 32;
 	AtTile.y = 0;
-	AtTile.w = 16;
-	AtTile.h = 16;
+	AtTile.w = GlobalTileSize;
+	AtTile.h = GlobalTileSize;
 
 	SDL_Rect DestTile = {};
-	DestTile.x = 16 * GameState->TileX;
-	DestTile.y = 16 * GameState->TileY;
-	DestTile.w = 16;
-	DestTile.h = 16;
+	DestTile.x = GlobalTileSize * GameState->TileX;
+	DestTile.y = GlobalTileSize * (GameState->TileY + 2);
+	DestTile.w = GlobalTileSize;
+	DestTile.h = GlobalTileSize;
 
+	SDLSetTextureColorMode(GameState->BitmapTexture, V4(1.0f, 1.0f, 1.0f, 1.0f));
 	SDL_RenderCopy(Renderer, GameState->BitmapTexture, &AtTile, &DestTile);
+
+	if(GameState->Mode == GameMode_OptionMenu)
+	{
+		// NOTE(hugo): Render options
+		// {
+		SDL_Rect OptionBackgroundRect = {};
+		OptionBackgroundRect.x = 100;
+		OptionBackgroundRect.y = 100;
+		OptionBackgroundRect.w = 64;
+		OptionBackgroundRect.h = 64;
+
+		SDL_SetRenderDrawColor(Renderer, 73, 73, 73, 255);
+		SDL_RenderFillRect(Renderer, &OptionBackgroundRect);
+		// }
+	}
+
+	// }
+
 
 	SDL_RenderPresent(Renderer);
 	// }

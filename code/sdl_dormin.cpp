@@ -15,8 +15,11 @@
 typedef bool b8;
 
 global_variable b8 GlobalRunning = true;
-const global_variable u32 GlobalWindowWidth = 512;
-const global_variable u32 GlobalWindowHeight = 512;
+const global_variable u32 GlobalTileSize = 16;
+const global_variable u32 GlobalWindowTileCountX = 32;
+const global_variable u32 GlobalWindowTileCountY = 34;
+const global_variable u32 GlobalWindowWidth = GlobalTileSize * GlobalWindowTileCountX;
+const global_variable u32 GlobalWindowHeight = GlobalTileSize * GlobalWindowTileCountY;
 
 struct game_memory
 {
@@ -98,6 +101,16 @@ SDLCreateTextureFromBitmap(SDL_Renderer* Renderer, bitmap Bitmap)
 
 	SDL_FreeSurface(Surface);
 	return(Result);
+}
+
+internal void
+SDLSetTextureColorMode(SDL_Texture* Texture, v4 Color)
+{
+	SDL_SetTextureColorMod(Texture,
+			u8(255.0f * Color.x),
+			u8(255.0f * Color.y),
+			u8(255.0f * Color.z));
+	SDL_SetTextureAlphaMod(Texture, u8(255.0f * Color.w));
 }
 
 #include "dormin.cpp"
