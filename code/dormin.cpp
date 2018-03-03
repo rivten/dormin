@@ -10,6 +10,31 @@ enum game_mode
 	GameMode_Count,
 };
 
+// TODO(hugo): Could be packing into
+// flags (Is top ? Is left ? 
+// are independant questions)
+enum direction
+{
+	Dir_Top,
+	Dir_TopRight,
+	Dir_Right,
+	Dir_BottomRight,
+	Dir_Bottom,
+	Dir_BottomLeft,
+	Dir_Left,
+	Dir_TopLeft,
+
+	Dir_Count,
+};
+
+struct player
+{
+	u8 TileX;
+	u8 TileY;
+
+	direction BowDir;
+};
+
 // TODO(hugo): Cache friendly
 // ordering of members ?
 struct game_state
@@ -18,8 +43,7 @@ struct game_state
 
 	u8 StaticWorld[32 * 32];
 
-	u8 TileX;
-	u8 TileY;
+	player Dormin;
 
 	game_mode Mode;
 
@@ -59,7 +83,7 @@ RenderStaticWorld(SDL_Renderer* Renderer, u8* World)
 				WallRect.y = (WorldY + 2) * GlobalTileSize + 3;
 				WallRect.w = GlobalTileSize;
 				WallRect.h = GlobalTileSize - 3;
-				SDL_SetRenderDrawColor(Renderer, 125, 119, 112, 255);
+				SDLSetRenderDrawColorV4(Renderer, ColorPalette_Beige);
 				SDL_RenderFillRect(Renderer, &WallRect);
 			}
 		}
@@ -99,6 +123,175 @@ SDLWriteText(SDL_Renderer* Renderer,
 }
 
 internal void
+SDLDrawRect(SDL_Renderer* Renderer,
+		u32 TileX, u32 TileY,
+		v4 Color, u32 HeightDisplacement = 0)
+{
+	SDL_Rect Rect = {};
+	Rect.x = GlobalTileSize * TileX;
+	Rect.y = GlobalTileSize * TileY + HeightDisplacement;
+	Rect.w = GlobalTileSize;
+	Rect.h = GlobalTileSize - HeightDisplacement;
+
+	SDLSetRenderDrawColorV4(Renderer, Color);
+	SDL_RenderFillRect(Renderer, &Rect);
+}
+
+internal bool
+IsIntegerInClosedRange(s32 Integer, s32 Lower, s32 Higher)
+{
+	bool Result = (Integer >= Lower) && (Integer <= Higher);
+	return(Result);
+}
+
+internal direction
+GetDirectionFromV2i(v2i V)
+{
+	Assert(IsIntegerInClosedRange(V.x, -1, 1));
+	Assert(IsIntegerInClosedRange(V.y, -1, 1));
+	Assert(V.x != 0 || V.y != 0);
+
+	direction Result = Dir_Top;
+
+	if(V.x == -1 && V.y == -1)
+	{
+		Result = Dir_TopLeft;
+	}
+	else if(V.x == -1 && V.y == 0)
+	{
+		Result = Dir_Left;
+	}
+	else if(V.x == -1 && V.y == 1)
+	{
+		Result = Dir_BottomLeft;
+	}
+	else if(V.x == 0 && V.y == -1)
+	{
+		Result = Dir_Top;
+	}
+	else if(V.x == 0 && V.y == 1)
+	{
+		Result = Dir_Bottom;
+	}
+	else if(V.x == 1 && V.y == -1)
+	{
+		Result = Dir_TopRight;
+	}
+	else if(V.x == 1 && V.y == 0)
+	{
+		Result = Dir_Right;
+	}
+	else if(V.x == 1 && V.y == 1)
+	{
+		Result = Dir_BottomRight;
+	}
+	else
+	{
+		InvalidCodePath;
+	}
+
+	return(Result);
+}
+
+internal v2i
+GetOffsetFromDir(direction Dir)
+{
+	v2i Result = {};
+	switch(Dir)
+	{
+		case Dir_Top:
+			{
+				Result = V2i(0, -1);
+			} break;
+		case Dir_TopRight:
+			{
+				Result = V2i(1, -1);
+			} break;
+		case Dir_Right:
+			{
+				Result = V2i(1, 0);
+			} break;
+		case Dir_BottomRight:
+			{
+				Result = V2i(1, 1);
+			} break;
+		case Dir_Bottom:
+			{
+				Result = V2i(0, 1);
+			} break;
+		case Dir_BottomLeft:
+			{
+				Result = V2i(-1, 1);
+			} break;
+		case Dir_Left:
+			{
+				Result = V2i(-1, 0);
+			} break;
+		case Dir_TopLeft:
+			{
+				Result = V2i(-1, -1);
+			} break;
+		InvalidDefaultCase;
+	}
+
+	return(Result);
+}
+
+internal void
+SDLRenderBitmapTileInWorld(SDL_Renderer* Renderer,
+		SDL_Texture* BitmapTexture,
+		v2i WorldTile, v2i BitmapTile,
+		v4 Color)
+{
+	SDL_Rect AtTile = {};
+	AtTile.x = GlobalTileSize * BitmapTile.x;
+	AtTile.y = GlobalTileSize * BitmapTile.y;
+	AtTile.w = GlobalTileSize;
+	AtTile.h = GlobalTileSize;
+
+	SDL_Rect DestTile = {};
+	DestTile.x = GlobalTileSize * WorldTile.x;
+	DestTile.y = GlobalTileSize * (WorldTile.y + 2); // NOTE(hugo): 2 is the Y world offset from UI
+	DestTile.w = GlobalTileSize;
+	DestTile.h = GlobalTileSize;
+
+	SDLSetTextureColorMode(BitmapTexture, Color);
+	SDL_RenderCopy(Renderer, BitmapTexture, &AtTile, &DestTile);
+}
+
+internal v2i
+BowGetTextureTile(direction Dir)
+{
+	v2i Result = {};
+	switch(Dir)
+	{
+		case Dir_Top:
+		case Dir_Bottom:
+			{
+				Result = V2i(12, 7);
+			} break;
+		case Dir_BottomLeft:
+		case Dir_TopRight:
+			{
+				Result = V2i(15, 2);
+			} break;
+		case Dir_Left:
+		case Dir_Right:
+			{
+				Result = V2i(13, 2);
+			} break;
+		case Dir_TopLeft:
+		case Dir_BottomRight:
+			{
+				Result = V2i(12, 5);
+			} break;
+		InvalidDefaultCase;
+	}
+
+	return(Result);
+}
+
+internal void
 GameUpdateAndRender(game_memory* Memory,
 		game_input* Input, SDL_Renderer* Renderer)
 {
@@ -110,8 +303,8 @@ GameUpdateAndRender(game_memory* Memory,
 		bitmap Bitmap = LoadBitmap(DATA_FOLDER("Bisasam_16x16.png"));
 		GameState->BitmapTexture = SDLCreateTextureFromBitmap(Renderer, Bitmap);
 
-		GameState->TileX = 1;
-		GameState->TileY = 1;
+		GameState->Dormin.TileX = 1;
+		GameState->Dormin.TileY = 1;
 
 		CreateStaticWorld(GameState->StaticWorld);
 		
@@ -122,42 +315,47 @@ GameUpdateAndRender(game_memory* Memory,
 
 	v2i PlayerIntent = {};
 
+	// TODO(hugo): If I press two keys in the same frame, then I crash
+	// because I can't get the bow direction.
+	// So I put an else on all these so that 
+	// you can do only one move per frame. But maybe we want to support
+	// multiple key press per frame
 	if(KeyPressed(Input, SCANCODE_UP) ||
 			KeyPressed(Input, SCANCODE_KP_8))
 	{
 		--PlayerIntent.y;
 	}
-	if(KeyPressed(Input, SCANCODE_DOWN) ||
+	else if(KeyPressed(Input, SCANCODE_DOWN) ||
 			KeyPressed(Input, SCANCODE_KP_2))
 	{
 		++PlayerIntent.y;
 	}
-	if(KeyPressed(Input, SCANCODE_LEFT) ||
+	else if(KeyPressed(Input, SCANCODE_LEFT) ||
 			KeyPressed(Input, SCANCODE_KP_4))
 	{
 		--PlayerIntent.x;
 	}
-	if(KeyPressed(Input, SCANCODE_RIGHT) ||
+	else if(KeyPressed(Input, SCANCODE_RIGHT) ||
 			KeyPressed(Input, SCANCODE_KP_6))
 	{
 		++PlayerIntent.x;
 	}
-	if(KeyPressed(Input, SCANCODE_KP_1))
+	else if(KeyPressed(Input, SCANCODE_KP_1))
 	{
 		--PlayerIntent.x;
 		++PlayerIntent.y;
 	}
-	if(KeyPressed(Input, SCANCODE_KP_3))
+	else if(KeyPressed(Input, SCANCODE_KP_3))
 	{
 		++PlayerIntent.x;
 		++PlayerIntent.y;
 	}
-	if(KeyPressed(Input, SCANCODE_KP_7))
+	else if(KeyPressed(Input, SCANCODE_KP_7))
 	{
 		--PlayerIntent.x;
 		--PlayerIntent.y;
 	}
-	if(KeyPressed(Input, SCANCODE_KP_9))
+	else if(KeyPressed(Input, SCANCODE_KP_9))
 	{
 		++PlayerIntent.x;
 		--PlayerIntent.y;
@@ -179,38 +377,61 @@ GameUpdateAndRender(game_memory* Memory,
 		}
 	}
 
-	v2i PlayerIntendedP = V2i(GameState->TileX, GameState->TileY) + PlayerIntent;
+	v2i PlayerIntendedP = V2i(GameState->Dormin.TileX, GameState->Dormin.TileY) + PlayerIntent;
 	if(GameState->StaticWorld[PlayerIntendedP.x + 32 * PlayerIntendedP.y] == 0)
 	{
-		GameState->TileX = PlayerIntendedP.x;
-		GameState->TileY = PlayerIntendedP.y;
+		GameState->Dormin.TileX = PlayerIntendedP.x;
+		GameState->Dormin.TileY = PlayerIntendedP.y;
+		if(PlayerIntent.x != 0 || PlayerIntent.y != 0)
+		{
+			GameState->Dormin.BowDir = GetDirectionFromV2i(PlayerIntent);
+		}
 	}
 
 	// NOTE(hugo): Render
 	// {
-	SDL_SetRenderDrawColor(Renderer, 36, 36, 36, 255);
+	SDLSetRenderDrawColorV4(Renderer, ColorPalette_Black);
 	SDL_RenderClear(Renderer);
 
 	RenderStaticWorld(Renderer, GameState->StaticWorld);
 
-	SDLWriteText(Renderer, GameState->BitmapTexture, "Arrows : ", 0, 1, V4(1.0f, 1.0f, 1.0f, 1.0f));
+	SDLWriteText(Renderer, GameState->BitmapTexture, "Arrows : ", 0, 1, ColorPalette_White);
 
 	// NOTE(hugo): Render player
 	// {
-	SDL_Rect AtTile = {};
-	AtTile.x = 32;
-	AtTile.y = 0;
-	AtTile.w = GlobalTileSize;
-	AtTile.h = GlobalTileSize;
+	v2i DorminWorldTile = V2i(GameState->Dormin.TileX, GameState->Dormin.TileY);
+	v2i BitmapTile = V2i(2, 0);
+	SDLRenderBitmapTileInWorld(Renderer, GameState->BitmapTexture,
+			DorminWorldTile, BitmapTile, ColorPalette_White);
+	// }
 
-	SDL_Rect DestTile = {};
-	DestTile.x = GlobalTileSize * GameState->TileX;
-	DestTile.y = GlobalTileSize * (GameState->TileY + 2);
-	DestTile.w = GlobalTileSize;
-	DestTile.h = GlobalTileSize;
+	// NOTE(hugo): Render bow
+	// {
+	direction BowDir = GameState->Dormin.BowDir;
+	v2i BowOffset = GetOffsetFromDir(BowDir);
+	v2i BowWorldTile = DorminWorldTile + BowOffset;
+	v2i BowTextureTile = BowGetTextureTile(BowDir);
+	SDLRenderBitmapTileInWorld(Renderer, GameState->BitmapTexture,
+			BowWorldTile, BowTextureTile, ColorPalette_White);
+	// }
 
-	SDLSetTextureColorMode(GameState->BitmapTexture, V4(1.0f, 1.0f, 1.0f, 1.0f));
-	SDL_RenderCopy(Renderer, GameState->BitmapTexture, &AtTile, &DestTile);
+	// NOTE(hugo): Render boss life
+	for(u32 TileX = 0; TileX < GlobalWindowTileCountX; ++TileX)
+	{
+		SDLDrawRect(Renderer, TileX, 0, ColorPalette_Red, 3);
+	}
+
+	// NOTE(hugo): Render arrows
+	// {
+	u32 ArrowCount = 3;
+	for(u32 ArrowIndex = 0; ArrowIndex < ArrowCount; ++ArrowIndex)
+	{
+		u32 TextTileX = StringLength("Arrows : ");
+		u32 Spacing = 2;
+		SDLDrawRect(Renderer, TextTileX + ArrowIndex * Spacing, 1,
+				ColorPalette_Blue, 3);
+	}
+	// }
 
 	if(GameState->Mode == GameMode_OptionMenu)
 	{

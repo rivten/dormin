@@ -21,6 +21,18 @@ const global_variable u32 GlobalWindowTileCountY = 34;
 const global_variable u32 GlobalWindowWidth = GlobalTileSize * GlobalWindowTileCountX;
 const global_variable u32 GlobalWindowHeight = GlobalTileSize * GlobalWindowTileCountY;
 
+// NOTE(hugo): Color Palette shamelessly taken from badwolf
+const global_variable v4 ColorPalette_Black = (1.0f / 255.0f) * V4(36.0f, 36.0f, 36.0f, 255.0f);
+const global_variable v4 ColorPalette_Beige = (1.0f / 255.0f) * V4(125.0f, 119.0f, 112.0f, 255.0f);
+const global_variable v4 ColorPalette_Green = (1.0f / 255.0f) * V4(143.0f, 204.0f, 61.0f, 255.0f);
+const global_variable v4 ColorPalette_Blue = (1.0f / 255.0f) * V4(0.0f, 157.0f, 249.0f, 255.0f);
+const global_variable v4 ColorPalette_Orange = (1.0f / 255.0f) * V4(225.0f, 143.0f, 57.0f, 255.0f);
+const global_variable v4 ColorPalette_Red = (1.0f / 255.0f) * V4(255.0f, 55.0f, 77.0f, 255.0f);
+const global_variable v4 ColorPalette_Pink = (1.0f / 255.0f) * V4(255.0f, 156.0f, 179.0f, 255.0f);
+const global_variable v4 ColorPalette_White = (1.0f / 255.0f) * V4(239.0f, 239.0f, 239.0f, 255.0f);
+
+const global_variable v4 ColorPalette_Yellow = (1.0f / 255.0f) * V4(255.0f, 178.0f, 0.0f, 255.0f);
+
 struct game_memory
 {
 	u64 StorageSize;
