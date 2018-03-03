@@ -37,11 +37,17 @@ enum player_mode
 
 struct player
 {
-	u8 TileX;
-	u8 TileY;
+	v2i WorldTile;
 	u8 AimLength;
+	u8 ArrowCount;
 	direction BowDir;
 	player_mode Mode;
+};
+
+struct world_dynamic_objects
+{
+	u8 ArrowInWorldCount;
+	v2i ArrowWorldTile[3];
 };
 
 // TODO(hugo): Cache friendly
@@ -51,6 +57,7 @@ struct game_state
 	SDL_Texture* BitmapTexture;
 
 	u8 StaticWorld[32 * 32];
+	world_dynamic_objects WorldDynamics;
 
 	player Dormin;
 
@@ -312,11 +319,11 @@ internal player
 InitPlayer(void)
 {
 	player Dormin = {};
-	Dormin.TileX = 16;
-	Dormin.TileY = 16;
+	Dormin.WorldTile = V2i(16, 16);
 	Dormin.AimLength = 1;
 	Dormin.BowDir = Dir_BottomRight;
 	Dormin.Mode = PlayerMode_Moving;
+	Dormin.ArrowCount = 3;
 
 	return(Dormin);
 }
@@ -333,7 +340,7 @@ GameRender(SDL_Renderer* Renderer, game_state* GameState)
 
 	// NOTE(hugo): Render player
 	// {
-	v2i DorminWorldTile = V2i(GameState->Dormin.TileX, GameState->Dormin.TileY);
+	v2i DorminWorldTile = GameState->Dormin.WorldTile;
 	v2i BitmapTile = V2i(2, 0);
 	SDLRenderBitmapTileInWorld(Renderer, GameState->BitmapTexture,
 			DorminWorldTile, BitmapTile, ColorPalette_White);
@@ -344,7 +351,8 @@ GameRender(SDL_Renderer* Renderer, game_state* GameState)
 	{
 		for(u8 AimIndex = 0; AimIndex < GameState->Dormin.AimLength; ++AimIndex)
 		{
-			v2i AimTile = V2i(GameState->Dormin.TileX, GameState->Dormin.TileY + 2)
+			v2i WorldOffsetInScreen = V2i(0, 2);
+			v2i AimTile = GameState->Dormin.WorldTile + WorldOffsetInScreen +
 				+ (AimIndex + 1) * GetOffsetFromDir(GameState->Dormin.BowDir);
 			SDLDrawRect(Renderer, AimTile, ColorPalette_Yellow);
 		}
@@ -358,6 +366,17 @@ GameRender(SDL_Renderer* Renderer, game_state* GameState)
 	v2i BowTextureTile = BowGetTextureTile(BowDir);
 	SDLRenderBitmapTileInWorld(Renderer, GameState->BitmapTexture,
 			BowWorldTile, BowTextureTile, ColorPalette_White);
+	// }
+
+	// NOTE(hugo): Render dynamic world objects
+	// {
+	for(u8 ArrowIndex = 0; ArrowIndex < GameState->WorldDynamics.ArrowInWorldCount; ++ArrowIndex)
+	{
+		v2i ArrowBitmapTile = V2i(3, 15);
+		SDLRenderBitmapTileInWorld(Renderer, GameState->BitmapTexture,
+				GameState->WorldDynamics.ArrowWorldTile[ArrowIndex], ArrowBitmapTile,
+				ColorPalette_Blue);
+	}
 	// }
 
 	// --------------------------------
@@ -374,7 +393,7 @@ GameRender(SDL_Renderer* Renderer, game_state* GameState)
 	// NOTE(hugo): Render arrows
 	// {
 	u32 ArrowCount = 3;
-	for(u32 ArrowIndex = 0; ArrowIndex < ArrowCount; ++ArrowIndex)
+	for(u32 ArrowIndex = 0; ArrowIndex < GameState->Dormin.ArrowCount; ++ArrowIndex)
 	{
 		u32 TextTileX = StringLength("Arrows : ");
 		u32 Spacing = 2;
@@ -423,6 +442,43 @@ internal bool
 IsNullV2i(v2i V)
 {
 	bool Result = (V.x == 0 && V.y == 0);
+	return(Result);
+}
+
+internal void
+PushArrowInWorldDynamics(world_dynamic_objects* WorldDynamics, v2i ArrowWorldTile)
+{
+	Assert(WorldDynamics->ArrowInWorldCount <= ArrayCount(WorldDynamics->ArrowWorldTile));
+	WorldDynamics->ArrowWorldTile[WorldDynamics->ArrowInWorldCount] = ArrowWorldTile;
+	++WorldDynamics->ArrowInWorldCount;
+}
+
+internal void
+FireArrow(game_state* GameState)
+{
+	Assert(GameState->Dormin.ArrowCount >= 1);
+	--GameState->Dormin.ArrowCount;
+
+	v2i ArrowWorldTile = GameState->Dormin.WorldTile +
+		GameState->Dormin.AimLength * GetOffsetFromDir(GameState->Dormin.BowDir);
+	PushArrowInWorldDynamics(&GameState->WorldDynamics, ArrowWorldTile);
+}
+
+internal void
+DeleteWorldDynamicsArrow(world_dynamic_objects* WorldDynamics, u8 ArrowIndex)
+{
+	Assert(WorldDynamics->ArrowInWorldCount <= ArrayCount(WorldDynamics->ArrowWorldTile));
+	Assert(WorldDynamics->ArrowInWorldCount >= 1);
+	Assert(ArrowIndex < WorldDynamics->ArrowInWorldCount);
+
+	WorldDynamics->ArrowWorldTile[ArrowIndex] = WorldDynamics->ArrowWorldTile[WorldDynamics->ArrowInWorldCount - 1];
+	--WorldDynamics->ArrowInWorldCount;
+}
+
+internal bool
+AreEqualsV2i(v2i A, v2i B)
+{
+	bool Result = (A.x == B.x && A.y == B.y);
 	return(Result);
 }
 
@@ -516,13 +572,16 @@ GameUpdateAndRender(game_memory* Memory,
 			{
 				case PlayerMode_Moving:
 					{
-						GameState->Dormin.Mode = PlayerMode_Aiming;
+						if(GameState->Dormin.ArrowCount != 0)
+						{
+							GameState->Dormin.Mode = PlayerMode_Aiming;
+						}
 					} break;
 				case PlayerMode_Aiming:
 					{
-						// TODO(hugo): Switch to firing then moving again
-						GameState->Dormin.Mode = PlayerMode_Moving;
+						FireArrow(GameState);
 						GameState->Dormin.AimLength = 1;
+						GameState->Dormin.Mode = PlayerMode_Moving;
 					} break;
 				InvalidDefaultCase;
 			}
@@ -532,15 +591,32 @@ GameUpdateAndRender(game_memory* Memory,
 		{
 			case PlayerMode_Moving:
 				{
-					v2i PlayerIntendedP = V2i(GameState->Dormin.TileX, GameState->Dormin.TileY) + PlayerIntent;
+					v2i PlayerIntendedP = GameState->Dormin.WorldTile + PlayerIntent;
 					if(GameState->StaticWorld[PlayerIntendedP.x + 32 * PlayerIntendedP.y] == 0)
 					{
-						GameState->Dormin.TileX = PlayerIntendedP.x;
-						GameState->Dormin.TileY = PlayerIntendedP.y;
+						GameState->Dormin.WorldTile = PlayerIntendedP;
 						if(!IsNullV2i(PlayerIntent))
 						{
 							GameState->Dormin.BowDir = GetDirectionFromV2i(PlayerIntent);
 						}
+
+						// NOTE(hugo): Checking if standing on an arrow
+						// {
+#define INVALID_ARROW_INDEX 0xFF
+						u8 OnArrowIndex = INVALID_ARROW_INDEX;
+						for(u8 ArrowIndex = 0; ArrowIndex < GameState->WorldDynamics.ArrowInWorldCount; ++ArrowIndex)
+						{
+							if(AreEqualsV2i(GameState->Dormin.WorldTile, GameState->WorldDynamics.ArrowWorldTile[ArrowIndex]))
+							{
+								OnArrowIndex = ArrowIndex;
+							}
+						}
+						if(OnArrowIndex != INVALID_ARROW_INDEX)
+						{
+							++GameState->Dormin.ArrowCount;
+							DeleteWorldDynamicsArrow(&GameState->WorldDynamics, OnArrowIndex);
+						}
+						// }
 					}
 				} break;
 			case PlayerMode_Aiming:
