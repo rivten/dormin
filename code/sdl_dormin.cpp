@@ -27,7 +27,7 @@ const global_variable v4 ColorPalette_Beige = (1.0f / 255.0f) * V4(125.0f, 119.0
 const global_variable v4 ColorPalette_Green = (1.0f / 255.0f) * V4(143.0f, 204.0f, 61.0f, 255.0f);
 const global_variable v4 ColorPalette_Blue = (1.0f / 255.0f) * V4(0.0f, 157.0f, 249.0f, 255.0f);
 const global_variable v4 ColorPalette_Orange = (1.0f / 255.0f) * V4(225.0f, 143.0f, 57.0f, 255.0f);
-const global_variable v4 ColorPalette_Red = (1.0f / 255.0f) * V4(255.0f, 55.0f, 77.0f, 255.0f);
+const global_variable v4 ColorPalette_Red = (1.0f / 255.0f) * V4(255.0f, 18.0f, 31.0f, 255.0f);
 const global_variable v4 ColorPalette_Pink = (1.0f / 255.0f) * V4(255.0f, 156.0f, 179.0f, 255.0f);
 const global_variable v4 ColorPalette_White = (1.0f / 255.0f) * V4(239.0f, 239.0f, 239.0f, 255.0f);
 

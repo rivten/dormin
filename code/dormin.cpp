@@ -27,12 +27,21 @@ enum direction
 	Dir_Count,
 };
 
+enum player_mode
+{
+	PlayerMode_Moving,
+	PlayerMode_Aiming,
+
+	PlayerMode_Count,
+};
+
 struct player
 {
 	u8 TileX;
 	u8 TileY;
-
+	u8 AimLength;
 	direction BowDir;
+	player_mode Mode;
 };
 
 // TODO(hugo): Cache friendly
@@ -136,6 +145,14 @@ SDLDrawRect(SDL_Renderer* Renderer,
 	SDLSetRenderDrawColorV4(Renderer, Color);
 	SDL_RenderFillRect(Renderer, &Rect);
 }
+
+internal void
+SDLDrawRect(SDL_Renderer* Renderer,
+		v2i Tile, v4 Color, u32 HeightDisplacement = 0)
+{
+	SDLDrawRect(Renderer, SafeCastToU32(Tile.x), SafeCastToU32(Tile.y), Color, HeightDisplacement);
+}
+
 
 internal bool
 IsIntegerInClosedRange(s32 Integer, s32 Lower, s32 Higher)
@@ -291,105 +308,22 @@ BowGetTextureTile(direction Dir)
 	return(Result);
 }
 
-internal void
-GameUpdateAndRender(game_memory* Memory,
-		game_input* Input, SDL_Renderer* Renderer)
+internal player
+InitPlayer(void)
 {
-	Assert(sizeof(game_state) <= Memory->StorageSize);
-	game_state* GameState = (game_state *)Memory->Storage;
+	player Dormin = {};
+	Dormin.TileX = 16;
+	Dormin.TileY = 16;
+	Dormin.AimLength = 1;
+	Dormin.BowDir = Dir_BottomRight;
+	Dormin.Mode = PlayerMode_Moving;
 
-	if(!GameState->IsInitialised)
-	{
-		bitmap Bitmap = LoadBitmap(DATA_FOLDER("Bisasam_16x16.png"));
-		GameState->BitmapTexture = SDLCreateTextureFromBitmap(Renderer, Bitmap);
+	return(Dormin);
+}
 
-		GameState->Dormin.TileX = 1;
-		GameState->Dormin.TileY = 1;
-
-		CreateStaticWorld(GameState->StaticWorld);
-		
-		GameState->Mode = GameMode_Rogue;
-
-		GameState->IsInitialised = true;
-	}
-
-	v2i PlayerIntent = {};
-
-	// TODO(hugo): If I press two keys in the same frame, then I crash
-	// because I can't get the bow direction.
-	// So I put an else on all these so that 
-	// you can do only one move per frame. But maybe we want to support
-	// multiple key press per frame
-	if(KeyPressed(Input, SCANCODE_UP) ||
-			KeyPressed(Input, SCANCODE_KP_8))
-	{
-		--PlayerIntent.y;
-	}
-	else if(KeyPressed(Input, SCANCODE_DOWN) ||
-			KeyPressed(Input, SCANCODE_KP_2))
-	{
-		++PlayerIntent.y;
-	}
-	else if(KeyPressed(Input, SCANCODE_LEFT) ||
-			KeyPressed(Input, SCANCODE_KP_4))
-	{
-		--PlayerIntent.x;
-	}
-	else if(KeyPressed(Input, SCANCODE_RIGHT) ||
-			KeyPressed(Input, SCANCODE_KP_6))
-	{
-		++PlayerIntent.x;
-	}
-	else if(KeyPressed(Input, SCANCODE_KP_1))
-	{
-		--PlayerIntent.x;
-		++PlayerIntent.y;
-	}
-	else if(KeyPressed(Input, SCANCODE_KP_3))
-	{
-		++PlayerIntent.x;
-		++PlayerIntent.y;
-	}
-	else if(KeyPressed(Input, SCANCODE_KP_7))
-	{
-		--PlayerIntent.x;
-		--PlayerIntent.y;
-	}
-	else if(KeyPressed(Input, SCANCODE_KP_9))
-	{
-		++PlayerIntent.x;
-		--PlayerIntent.y;
-	}
-
-	if(KeyPressed(Input, SCANCODE_ESCAPE))
-	{
-		switch(GameState->Mode)
-		{
-			case GameMode_Rogue:
-				{
-					GameState->Mode = GameMode_OptionMenu;
-				} break;
-			case GameMode_OptionMenu:
-				{
-					GameState->Mode = GameMode_Rogue;
-				} break;
-			InvalidDefaultCase;
-		}
-	}
-
-	v2i PlayerIntendedP = V2i(GameState->Dormin.TileX, GameState->Dormin.TileY) + PlayerIntent;
-	if(GameState->StaticWorld[PlayerIntendedP.x + 32 * PlayerIntendedP.y] == 0)
-	{
-		GameState->Dormin.TileX = PlayerIntendedP.x;
-		GameState->Dormin.TileY = PlayerIntendedP.y;
-		if(PlayerIntent.x != 0 || PlayerIntent.y != 0)
-		{
-			GameState->Dormin.BowDir = GetDirectionFromV2i(PlayerIntent);
-		}
-	}
-
-	// NOTE(hugo): Render
-	// {
+internal void
+GameRender(SDL_Renderer* Renderer, game_state* GameState)
+{
 	SDLSetRenderDrawColorV4(Renderer, ColorPalette_Black);
 	SDL_RenderClear(Renderer);
 
@@ -405,6 +339,17 @@ GameUpdateAndRender(game_memory* Memory,
 			DorminWorldTile, BitmapTile, ColorPalette_White);
 	// }
 
+	// NOTE(hugo): Render bow aim
+	if(GameState->Dormin.Mode == PlayerMode_Aiming)
+	{
+		for(u8 AimIndex = 0; AimIndex < GameState->Dormin.AimLength; ++AimIndex)
+		{
+			v2i AimTile = V2i(GameState->Dormin.TileX, GameState->Dormin.TileY + 2)
+				+ (AimIndex + 1) * GetOffsetFromDir(GameState->Dormin.BowDir);
+			SDLDrawRect(Renderer, AimTile, ColorPalette_Yellow);
+		}
+	}
+
 	// NOTE(hugo): Render bow
 	// {
 	direction BowDir = GameState->Dormin.BowDir;
@@ -414,6 +359,11 @@ GameUpdateAndRender(game_memory* Memory,
 	SDLRenderBitmapTileInWorld(Renderer, GameState->BitmapTexture,
 			BowWorldTile, BowTextureTile, ColorPalette_White);
 	// }
+
+	// --------------------------------
+	// NOTE(hugo): Render UI
+	// --------------------------------
+	// {
 
 	// NOTE(hugo): Render boss life
 	for(u32 TileX = 0; TileX < GlobalWindowTileCountX; ++TileX)
@@ -449,9 +399,172 @@ GameUpdateAndRender(game_memory* Memory,
 	}
 
 	// }
-
+	// --------------------------------
+	// NOTE(hugo): End Render UI
+	// --------------------------------
 
 	SDL_RenderPresent(Renderer);
-	// }
+}
+
+internal u8
+MinU8(u8 A, u8 B)
+{
+	if(A <= B)
+	{
+		return(A);
+	}
+	else
+	{
+		return(B);
+	}
+}
+
+internal bool
+IsNullV2i(v2i V)
+{
+	bool Result = (V.x == 0 && V.y == 0);
+	return(Result);
+}
+
+internal void
+GameUpdateAndRender(game_memory* Memory,
+		game_input* Input, SDL_Renderer* Renderer)
+{
+	Assert(sizeof(game_state) <= Memory->StorageSize);
+	game_state* GameState = (game_state *)Memory->Storage;
+
+	if(!GameState->IsInitialised)
+	{
+		bitmap Bitmap = LoadBitmap(DATA_FOLDER("Bisasam_16x16.png"));
+		GameState->BitmapTexture = SDLCreateTextureFromBitmap(Renderer, Bitmap);
+
+		GameState->Dormin = InitPlayer();
+		CreateStaticWorld(GameState->StaticWorld);
+		GameState->Mode = GameMode_Rogue;
+
+		GameState->IsInitialised = true;
+	}
+
+	if(KeyPressed(Input, SCANCODE_ESCAPE))
+	{
+		switch(GameState->Mode)
+		{
+			case GameMode_Rogue:
+				{
+					GameState->Mode = GameMode_OptionMenu;
+				} break;
+			case GameMode_OptionMenu:
+				{
+					GameState->Mode = GameMode_Rogue;
+				} break;
+			InvalidDefaultCase;
+		}
+	}
+
+	if(GameState->Mode == GameMode_Rogue)
+	{
+		v2i PlayerIntent = {};
+
+		// TODO(hugo): If I press two keys in the same frame, then I crash
+		// because I can't get the bow direction.
+		// So I put an else on all these so that 
+		// you can do only one move per frame. But maybe we want to support
+		// multiple key press per frame
+		if(KeyPressed(Input, SCANCODE_UP) ||
+				KeyPressed(Input, SCANCODE_KP_8))
+		{
+			--PlayerIntent.y;
+		}
+		else if(KeyPressed(Input, SCANCODE_DOWN) ||
+				KeyPressed(Input, SCANCODE_KP_2))
+		{
+			++PlayerIntent.y;
+		}
+		else if(KeyPressed(Input, SCANCODE_LEFT) ||
+				KeyPressed(Input, SCANCODE_KP_4))
+		{
+			--PlayerIntent.x;
+		}
+		else if(KeyPressed(Input, SCANCODE_RIGHT) ||
+				KeyPressed(Input, SCANCODE_KP_6))
+		{
+			++PlayerIntent.x;
+		}
+		else if(KeyPressed(Input, SCANCODE_KP_1))
+		{
+			--PlayerIntent.x;
+			++PlayerIntent.y;
+		}
+		else if(KeyPressed(Input, SCANCODE_KP_3))
+		{
+			++PlayerIntent.x;
+			++PlayerIntent.y;
+		}
+		else if(KeyPressed(Input, SCANCODE_KP_7))
+		{
+			--PlayerIntent.x;
+			--PlayerIntent.y;
+		}
+		else if(KeyPressed(Input, SCANCODE_KP_9))
+		{
+			++PlayerIntent.x;
+			--PlayerIntent.y;
+		}
+		else if(KeyPressed(Input, SCANCODE_F))
+		{
+			switch(GameState->Dormin.Mode)
+			{
+				case PlayerMode_Moving:
+					{
+						GameState->Dormin.Mode = PlayerMode_Aiming;
+					} break;
+				case PlayerMode_Aiming:
+					{
+						// TODO(hugo): Switch to firing then moving again
+						GameState->Dormin.Mode = PlayerMode_Moving;
+						GameState->Dormin.AimLength = 1;
+					} break;
+				InvalidDefaultCase;
+			}
+		}
+
+		switch(GameState->Dormin.Mode)
+		{
+			case PlayerMode_Moving:
+				{
+					v2i PlayerIntendedP = V2i(GameState->Dormin.TileX, GameState->Dormin.TileY) + PlayerIntent;
+					if(GameState->StaticWorld[PlayerIntendedP.x + 32 * PlayerIntendedP.y] == 0)
+					{
+						GameState->Dormin.TileX = PlayerIntendedP.x;
+						GameState->Dormin.TileY = PlayerIntendedP.y;
+						if(!IsNullV2i(PlayerIntent))
+						{
+							GameState->Dormin.BowDir = GetDirectionFromV2i(PlayerIntent);
+						}
+					}
+				} break;
+			case PlayerMode_Aiming:
+				{
+					if(!IsNullV2i(PlayerIntent))
+					{
+						direction AimingDir = GetDirectionFromV2i(PlayerIntent);
+						if(AimingDir == GameState->Dormin.BowDir)
+						{
+							u8 MaxAimLength = 5;
+							GameState->Dormin.AimLength = MinU8(MaxAimLength, GameState->Dormin.AimLength + 1);
+						}
+						else
+						{
+							GameState->Dormin.AimLength = 1;
+							GameState->Dormin.BowDir = AimingDir;
+						}
+					}
+				} break;
+			InvalidDefaultCase;
+		}
+	}
+
+
+	GameRender(Renderer, GameState);
 }
 
