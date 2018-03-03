@@ -6,6 +6,7 @@
 
 #include <rivten.h>
 #include <rivten_math.h>
+#include <random.h>
 #include <stdio.h>
 
 #include "dormin_input.h"

@@ -3,6 +3,30 @@
 #define DATA_FOLDER(Path) "../data/" Path
 #define INVALID_ARROW_INDEX 0xFF
 
+/* TODO(hugo)
+
+   --- TASKS ---
+	 * Death
+	 * Think about how to properly fire arrows
+     * World gen
+     * More bosses behavior
+	 * More beautiful colors
+	 * Make a tutorial
+	 * Make a option menu
+	 * Animation (death, arrow, boss, ...)
+	 * Static world level loading
+	 * World collision for the dynamic objects (bosses)
+	 * Avoid having rivten.h and other file dependency outside of the repo (if someone else need to compile)
+ 
+   --- BUG ---
+     * When you throw an arrow against a wall, you cannot get that arrow back
+	
+   --- IDEAS ---
+     * You see boss aiming ?
+	 * There are trees so that you cannot see everything from up view.
+	      So you have to guess where the boss is at that very moment.
+*/
+
 enum game_mode
 {
 	GameMode_Rogue,
@@ -45,9 +69,10 @@ struct dormin
 	dormin_mode Mode;
 };
 
+#define TEST_BOSS_LENGTH 10
 struct test_boss
 {
-	v2i WorldTile;
+	v2i WorldTiles[TEST_BOSS_LENGTH];
 	u8 LifePoints;
 	direction Dir;
 };
@@ -73,12 +98,14 @@ struct game_state
 	dormin Dormin;
 
 	game_mode Mode;
+	random_series WorldGenEntropy;
 
 	b8 IsInitialised;
 };
 
 internal void
-CreateStaticWorld(u8* World)
+CreateStaticWorld(u8* World,
+		random_series* WorldGenEntropy)
 {
 	for(u32 WorldY = 0; WorldY < 32; ++WorldY)
 	{
@@ -90,6 +117,14 @@ CreateStaticWorld(u8* World)
 					WorldY == 0 || WorldY == 31)
 			{
 				*WorldTile = 1;
+			}
+			else
+			{
+				u32 WorldGenRandom = RandomChoice(WorldGenEntropy, 256);
+				if(WorldGenRandom < 8)
+				{
+					*WorldTile = 1;
+				}
 			}
 		}
 	}
@@ -407,10 +442,24 @@ GameRender(SDL_Renderer* Renderer, game_state* GameState)
 	}
 
 	{
-		v2i BossBitmapTile = GetBitmapTileFromAscii('#');
-		SDLRenderBitmapTileInWorld(Renderer, GameState->BitmapTexture,
-				GameState->WorldDynamics.Boss.WorldTile, BossBitmapTile,
-				ColorPalette_Green);
+		test_boss* Boss = &GameState->WorldDynamics.Boss;
+		for(u8 BossTileIndex = 0; BossTileIndex < TEST_BOSS_LENGTH; ++BossTileIndex)
+		{
+			v2i BossBitmapTile = GetBitmapTileFromAscii('#');
+			if(BossTileIndex == 0)
+			{
+				BossBitmapTile = GetBitmapTileFromAscii('0');
+			}
+
+			v4 Color = ColorPalette_Green;
+			if(BossTileIndex == TEST_BOSS_LENGTH - 1)
+			{
+				Color = ColorPalette_Red;
+			}
+			SDLRenderBitmapTileInWorld(Renderer, GameState->BitmapTexture,
+					GameState->WorldDynamics.Boss.WorldTiles[BossTileIndex],
+					BossBitmapTile, Color);
+		}
 	}
 
 	// }
@@ -505,7 +554,7 @@ FireArrow(game_state* GameState)
 	v2i ArrowWorldTile = GetTileFromDirLength(GameState->Dormin.WorldTile,
 			GameState->Dormin.BowDir, GameState->Dormin.AimLength);
 
-	if(AreEqualsV2i(ArrowWorldTile, GameState->WorldDynamics.Boss.WorldTile))
+	if(AreEqualsV2i(ArrowWorldTile, GameState->WorldDynamics.Boss.WorldTiles[TEST_BOSS_LENGTH - 1]))
 	{
 		--GameState->WorldDynamics.Boss.LifePoints;
 	}
@@ -544,33 +593,33 @@ GetStaticWorldTileValue(u8* StaticWorld, v2i Tile)
 internal void
 StepWorld(game_state* GameState)
 {
-	v2i BossWorldTile = GameState->WorldDynamics.Boss.WorldTile;
+	v2i FrontBossWorldTile = GameState->WorldDynamics.Boss.WorldTiles[0];
 	switch(GameState->WorldDynamics.Boss.Dir)
 	{
 		case Dir_Top:
 			{
-				if(BossWorldTile.y <= 2)
+				if(FrontBossWorldTile.y <= 2)
 				{
 					GameState->WorldDynamics.Boss.Dir = Dir_Right;
 				}
 			} break;
 		case Dir_Right:
 			{
-				if(SafeCastToU32(BossWorldTile.x) >= GlobalWindowTileCountX - 3)
+				if(SafeCastToU32(FrontBossWorldTile.x) >= GlobalWindowTileCountX - 3)
 				{
 					GameState->WorldDynamics.Boss.Dir = Dir_Bottom;
 				}
 			} break;
 		case Dir_Bottom:
 			{
-				if(SafeCastToU32(BossWorldTile.y) >= GlobalWindowTileCountY - 5)
+				if(SafeCastToU32(FrontBossWorldTile.y) >= GlobalWindowTileCountY - 5)
 				{
 					GameState->WorldDynamics.Boss.Dir = Dir_Left;
 				}
 			} break;
 		case Dir_Left:
 			{
-				if(BossWorldTile.x <= 2)
+				if(FrontBossWorldTile.x <= 2)
 				{
 					GameState->WorldDynamics.Boss.Dir = Dir_Top;
 				}
@@ -578,7 +627,12 @@ StepWorld(game_state* GameState)
 		InvalidDefaultCase;
 	}
 
-	GameState->WorldDynamics.Boss.WorldTile += GetOffsetFromDir(GameState->WorldDynamics.Boss.Dir);
+	for(u8 TileIndex = TEST_BOSS_LENGTH - 1; TileIndex > 0; --TileIndex)
+	{
+		GameState->WorldDynamics.Boss.WorldTiles[TileIndex] =
+			GameState->WorldDynamics.Boss.WorldTiles[TileIndex - 1];
+	}
+	GameState->WorldDynamics.Boss.WorldTiles[0] += GetOffsetFromDir(GameState->WorldDynamics.Boss.Dir);
 }
 
 internal void
@@ -651,6 +705,8 @@ UpdateRogueMode(game_input* Input, game_state* GameState)
 		}
 	}
 
+	bool ShouldStepWorld = false;
+
 	switch(GameState->Dormin.Mode)
 	{
 		case DorminMode_Moving:
@@ -690,9 +746,7 @@ UpdateRogueMode(game_input* Input, game_state* GameState)
 						}
 						// }
 
-						// TODO(hugo): Not thrilled about calling this in
-						// differente places
-						StepWorld(GameState);
+						ShouldStepWorld = true;
 					}
 				}
 			} break;
@@ -701,7 +755,7 @@ UpdateRogueMode(game_input* Input, game_state* GameState)
 				if(KeyPressed(Input, SCANCODE_ESCAPE))
 				{
 					ResetAimingMode(&GameState->Dormin);
-					StepWorld(GameState);
+					ShouldStepWorld = true;
 				}
 
 				if(!IsNullV2i(PlayerIntent))
@@ -715,6 +769,10 @@ UpdateRogueMode(game_input* Input, game_state* GameState)
 								GameState->Dormin.BowDir, TargetLength);
 						if(GetStaticWorldTileValue(GameState->StaticWorld, TargetWorldTile) == 0)
 						{
+							// NOTE(hugo): Do not step world when at max aim length
+							// or when performing invalid move
+							ShouldStepWorld = (GameState->Dormin.AimLength != TargetLength);
+
 							GameState->Dormin.AimLength = TargetLength;
 						}
 					}
@@ -722,19 +780,26 @@ UpdateRogueMode(game_input* Input, game_state* GameState)
 					{
 						GameState->Dormin.AimLength = 1;
 						GameState->Dormin.BowDir = AimingDir;
+						ShouldStepWorld = true;
 					}
-
-					StepWorld(GameState);
 				}
 			} break;
 		InvalidDefaultCase;
+	}
+
+	if(ShouldStepWorld)
+	{
+		StepWorld(GameState);
 	}
 }
 
 internal void
 InitWorldDynamicObjects(world_dynamic_objects* Dynamics)
 {
-	Dynamics->Boss.WorldTile = V2i(3, 3);
+	for(u8 TileIndex = 0; TileIndex < TEST_BOSS_LENGTH; ++TileIndex)
+	{
+		Dynamics->Boss.WorldTiles[TileIndex] = V2i(3 + TEST_BOSS_LENGTH - TileIndex, 3);
+	}
 	Dynamics->Boss.LifePoints = GlobalWindowTileCountX;
 }
 
@@ -751,7 +816,8 @@ GameUpdateAndRender(game_memory* Memory,
 		GameState->BitmapTexture = SDLCreateTextureFromBitmap(Renderer, Bitmap);
 
 		GameState->Dormin = InitDormin();
-		CreateStaticWorld(GameState->StaticWorld);
+		GameState->WorldGenEntropy = RandomSeed(1234);
+		CreateStaticWorld(GameState->StaticWorld, &GameState->WorldGenEntropy);
 		GameState->Mode = GameMode_Rogue;
 
 		InitWorldDynamicObjects(&GameState->WorldDynamics);
