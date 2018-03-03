@@ -1,6 +1,7 @@
 #pragma once
 
 #define DATA_FOLDER(Path) "../data/" Path
+#define INVALID_ARROW_INDEX 0xFF
 
 enum game_mode
 {
@@ -27,27 +28,37 @@ enum direction
 	Dir_Count,
 };
 
-enum player_mode
+enum dormin_mode
 {
-	PlayerMode_Moving,
-	PlayerMode_Aiming,
+	DorminMode_Moving,
+	DorminMode_Aiming,
 
-	PlayerMode_Count,
+	DorminMode_Count,
 };
 
-struct player
+struct dormin
 {
 	v2i WorldTile;
 	u8 AimLength;
 	u8 ArrowCount;
 	direction BowDir;
-	player_mode Mode;
+	dormin_mode Mode;
+};
+
+struct test_boss
+{
+	v2i WorldTile;
+	u8 LifePoints;
+	direction Dir;
 };
 
 struct world_dynamic_objects
 {
 	u8 ArrowInWorldCount;
 	v2i ArrowWorldTile[3];
+
+	test_boss Boss;
+
 };
 
 // TODO(hugo): Cache friendly
@@ -59,7 +70,7 @@ struct game_state
 	u8 StaticWorld[32 * 32];
 	world_dynamic_objects WorldDynamics;
 
-	player Dormin;
+	dormin Dormin;
 
 	game_mode Mode;
 
@@ -315,17 +326,34 @@ BowGetTextureTile(direction Dir)
 	return(Result);
 }
 
-internal player
-InitPlayer(void)
+internal dormin
+InitDormin(void)
 {
-	player Dormin = {};
+	dormin Dormin = {};
 	Dormin.WorldTile = V2i(16, 16);
 	Dormin.AimLength = 1;
 	Dormin.BowDir = Dir_BottomRight;
-	Dormin.Mode = PlayerMode_Moving;
+	Dormin.Mode = DorminMode_Moving;
 	Dormin.ArrowCount = 3;
 
 	return(Dormin);
+}
+
+internal v2i
+GetTileFromDirLength(v2i StartTile, direction Dir, u8 Length)
+{
+	v2i Result = StartTile + Length * GetOffsetFromDir(Dir);
+	return(Result);
+}
+
+internal v2i
+GetBitmapTileFromAscii(char C)
+{
+	v2i Result = {};
+	Result.x = C % 16;
+	Result.y = C / 16;
+
+	return(Result);
 }
 
 internal void
@@ -338,7 +366,7 @@ GameRender(SDL_Renderer* Renderer, game_state* GameState)
 
 	SDLWriteText(Renderer, GameState->BitmapTexture, "Arrows : ", 0, 1, ColorPalette_White);
 
-	// NOTE(hugo): Render player
+	// NOTE(hugo): Render dormin
 	// {
 	v2i DorminWorldTile = GameState->Dormin.WorldTile;
 	v2i BitmapTile = V2i(2, 0);
@@ -347,13 +375,13 @@ GameRender(SDL_Renderer* Renderer, game_state* GameState)
 	// }
 
 	// NOTE(hugo): Render bow aim
-	if(GameState->Dormin.Mode == PlayerMode_Aiming)
+	if(GameState->Dormin.Mode == DorminMode_Aiming)
 	{
 		for(u8 AimIndex = 0; AimIndex < GameState->Dormin.AimLength; ++AimIndex)
 		{
 			v2i WorldOffsetInScreen = V2i(0, 2);
-			v2i AimTile = GameState->Dormin.WorldTile + WorldOffsetInScreen +
-				+ (AimIndex + 1) * GetOffsetFromDir(GameState->Dormin.BowDir);
+			v2i AimTile = GetTileFromDirLength(GameState->Dormin.WorldTile,
+					GameState->Dormin.BowDir, AimIndex + 1) + WorldOffsetInScreen;
 			SDLDrawRect(Renderer, AimTile, ColorPalette_Yellow);
 		}
 	}
@@ -377,6 +405,14 @@ GameRender(SDL_Renderer* Renderer, game_state* GameState)
 				GameState->WorldDynamics.ArrowWorldTile[ArrowIndex], ArrowBitmapTile,
 				ColorPalette_Blue);
 	}
+
+	{
+		v2i BossBitmapTile = GetBitmapTileFromAscii('#');
+		SDLRenderBitmapTileInWorld(Renderer, GameState->BitmapTexture,
+				GameState->WorldDynamics.Boss.WorldTile, BossBitmapTile,
+				ColorPalette_Green);
+	}
+
 	// }
 
 	// --------------------------------
@@ -385,7 +421,7 @@ GameRender(SDL_Renderer* Renderer, game_state* GameState)
 	// {
 
 	// NOTE(hugo): Render boss life
-	for(u32 TileX = 0; TileX < GlobalWindowTileCountX; ++TileX)
+	for(u32 TileX = 0; TileX < GameState->WorldDynamics.Boss.LifePoints; ++TileX)
 	{
 		SDLDrawRect(Renderer, TileX, 0, ColorPalette_Red, 3);
 	}
@@ -453,15 +489,31 @@ PushArrowInWorldDynamics(world_dynamic_objects* WorldDynamics, v2i ArrowWorldTil
 	++WorldDynamics->ArrowInWorldCount;
 }
 
+internal bool
+AreEqualsV2i(v2i A, v2i B)
+{
+	bool Result = (A.x == B.x && A.y == B.y);
+	return(Result);
+}
+
 internal void
 FireArrow(game_state* GameState)
 {
 	Assert(GameState->Dormin.ArrowCount >= 1);
 	--GameState->Dormin.ArrowCount;
 
-	v2i ArrowWorldTile = GameState->Dormin.WorldTile +
-		GameState->Dormin.AimLength * GetOffsetFromDir(GameState->Dormin.BowDir);
-	PushArrowInWorldDynamics(&GameState->WorldDynamics, ArrowWorldTile);
+	v2i ArrowWorldTile = GetTileFromDirLength(GameState->Dormin.WorldTile,
+			GameState->Dormin.BowDir, GameState->Dormin.AimLength);
+
+	if(AreEqualsV2i(ArrowWorldTile, GameState->WorldDynamics.Boss.WorldTile))
+	{
+		--GameState->WorldDynamics.Boss.LifePoints;
+	}
+	else
+	{
+		PushArrowInWorldDynamics(&GameState->WorldDynamics, ArrowWorldTile);
+	}
+
 }
 
 internal void
@@ -475,126 +527,147 @@ DeleteWorldDynamicsArrow(world_dynamic_objects* WorldDynamics, u8 ArrowIndex)
 	--WorldDynamics->ArrowInWorldCount;
 }
 
-internal bool
-AreEqualsV2i(v2i A, v2i B)
+internal void
+ResetAimingMode(dormin* Dormin)
 {
-	bool Result = (A.x == B.x && A.y == B.y);
+	Dormin->AimLength = 1;
+	Dormin->Mode = DorminMode_Moving;
+}
+
+inline u8
+GetStaticWorldTileValue(u8* StaticWorld, v2i Tile)
+{
+	u8 Result = StaticWorld[Tile.x + 32 * Tile.y];
 	return(Result);
 }
 
 internal void
-GameUpdateAndRender(game_memory* Memory,
-		game_input* Input, SDL_Renderer* Renderer)
+StepWorld(game_state* GameState)
 {
-	Assert(sizeof(game_state) <= Memory->StorageSize);
-	game_state* GameState = (game_state *)Memory->Storage;
-
-	if(!GameState->IsInitialised)
+	v2i BossWorldTile = GameState->WorldDynamics.Boss.WorldTile;
+	switch(GameState->WorldDynamics.Boss.Dir)
 	{
-		bitmap Bitmap = LoadBitmap(DATA_FOLDER("Bisasam_16x16.png"));
-		GameState->BitmapTexture = SDLCreateTextureFromBitmap(Renderer, Bitmap);
-
-		GameState->Dormin = InitPlayer();
-		CreateStaticWorld(GameState->StaticWorld);
-		GameState->Mode = GameMode_Rogue;
-
-		GameState->IsInitialised = true;
+		case Dir_Top:
+			{
+				if(BossWorldTile.y <= 2)
+				{
+					GameState->WorldDynamics.Boss.Dir = Dir_Right;
+				}
+			} break;
+		case Dir_Right:
+			{
+				if(SafeCastToU32(BossWorldTile.x) >= GlobalWindowTileCountX - 3)
+				{
+					GameState->WorldDynamics.Boss.Dir = Dir_Bottom;
+				}
+			} break;
+		case Dir_Bottom:
+			{
+				if(SafeCastToU32(BossWorldTile.y) >= GlobalWindowTileCountY - 5)
+				{
+					GameState->WorldDynamics.Boss.Dir = Dir_Left;
+				}
+			} break;
+		case Dir_Left:
+			{
+				if(BossWorldTile.x <= 2)
+				{
+					GameState->WorldDynamics.Boss.Dir = Dir_Top;
+				}
+			} break;
+		InvalidDefaultCase;
 	}
 
-	if(KeyPressed(Input, SCANCODE_ESCAPE))
+	GameState->WorldDynamics.Boss.WorldTile += GetOffsetFromDir(GameState->WorldDynamics.Boss.Dir);
+}
+
+internal void
+UpdateRogueMode(game_input* Input, game_state* GameState)
+{
+	v2i PlayerIntent = {};
+
+	// TODO(hugo): If I press two keys in the same frame, then I crash
+	// because I can't get the bow direction.
+	// So I put an else on all these so that 
+	// you can do only one move per frame. But maybe we want to support
+	// multiple key press per frame
+	if(KeyPressed(Input, SCANCODE_UP) ||
+			KeyPressed(Input, SCANCODE_KP_8))
 	{
-		switch(GameState->Mode)
+		--PlayerIntent.y;
+	}
+	else if(KeyPressed(Input, SCANCODE_DOWN) ||
+			KeyPressed(Input, SCANCODE_KP_2))
+	{
+		++PlayerIntent.y;
+	}
+	else if(KeyPressed(Input, SCANCODE_LEFT) ||
+			KeyPressed(Input, SCANCODE_KP_4))
+	{
+		--PlayerIntent.x;
+	}
+	else if(KeyPressed(Input, SCANCODE_RIGHT) ||
+			KeyPressed(Input, SCANCODE_KP_6))
+	{
+		++PlayerIntent.x;
+	}
+	else if(KeyPressed(Input, SCANCODE_KP_1))
+	{
+		--PlayerIntent.x;
+		++PlayerIntent.y;
+	}
+	else if(KeyPressed(Input, SCANCODE_KP_3))
+	{
+		++PlayerIntent.x;
+		++PlayerIntent.y;
+	}
+	else if(KeyPressed(Input, SCANCODE_KP_7))
+	{
+		--PlayerIntent.x;
+		--PlayerIntent.y;
+	}
+	else if(KeyPressed(Input, SCANCODE_KP_9))
+	{
+		++PlayerIntent.x;
+		--PlayerIntent.y;
+	}
+	else if(KeyPressed(Input, SCANCODE_F))
+	{
+		switch(GameState->Dormin.Mode)
 		{
-			case GameMode_Rogue:
+			case DorminMode_Moving:
 				{
-					GameState->Mode = GameMode_OptionMenu;
+					if(GameState->Dormin.ArrowCount != 0)
+					{
+						GameState->Dormin.Mode = DorminMode_Aiming;
+					}
 				} break;
-			case GameMode_OptionMenu:
+			case DorminMode_Aiming:
 				{
-					GameState->Mode = GameMode_Rogue;
+					FireArrow(GameState);
+					ResetAimingMode(&GameState->Dormin);
 				} break;
 			InvalidDefaultCase;
 		}
 	}
 
-	if(GameState->Mode == GameMode_Rogue)
+	switch(GameState->Dormin.Mode)
 	{
-		v2i PlayerIntent = {};
-
-		// TODO(hugo): If I press two keys in the same frame, then I crash
-		// because I can't get the bow direction.
-		// So I put an else on all these so that 
-		// you can do only one move per frame. But maybe we want to support
-		// multiple key press per frame
-		if(KeyPressed(Input, SCANCODE_UP) ||
-				KeyPressed(Input, SCANCODE_KP_8))
-		{
-			--PlayerIntent.y;
-		}
-		else if(KeyPressed(Input, SCANCODE_DOWN) ||
-				KeyPressed(Input, SCANCODE_KP_2))
-		{
-			++PlayerIntent.y;
-		}
-		else if(KeyPressed(Input, SCANCODE_LEFT) ||
-				KeyPressed(Input, SCANCODE_KP_4))
-		{
-			--PlayerIntent.x;
-		}
-		else if(KeyPressed(Input, SCANCODE_RIGHT) ||
-				KeyPressed(Input, SCANCODE_KP_6))
-		{
-			++PlayerIntent.x;
-		}
-		else if(KeyPressed(Input, SCANCODE_KP_1))
-		{
-			--PlayerIntent.x;
-			++PlayerIntent.y;
-		}
-		else if(KeyPressed(Input, SCANCODE_KP_3))
-		{
-			++PlayerIntent.x;
-			++PlayerIntent.y;
-		}
-		else if(KeyPressed(Input, SCANCODE_KP_7))
-		{
-			--PlayerIntent.x;
-			--PlayerIntent.y;
-		}
-		else if(KeyPressed(Input, SCANCODE_KP_9))
-		{
-			++PlayerIntent.x;
-			--PlayerIntent.y;
-		}
-		else if(KeyPressed(Input, SCANCODE_F))
-		{
-			switch(GameState->Dormin.Mode)
+		case DorminMode_Moving:
 			{
-				case PlayerMode_Moving:
-					{
-						if(GameState->Dormin.ArrowCount != 0)
-						{
-							GameState->Dormin.Mode = PlayerMode_Aiming;
-						}
-					} break;
-				case PlayerMode_Aiming:
-					{
-						FireArrow(GameState);
-						GameState->Dormin.AimLength = 1;
-						GameState->Dormin.Mode = PlayerMode_Moving;
-					} break;
-				InvalidDefaultCase;
-			}
-		}
-
-		switch(GameState->Dormin.Mode)
-		{
-			case PlayerMode_Moving:
+				if(KeyPressed(Input, SCANCODE_ESCAPE))
 				{
-					v2i PlayerIntendedP = GameState->Dormin.WorldTile + PlayerIntent;
-					if(GameState->StaticWorld[PlayerIntendedP.x + 32 * PlayerIntendedP.y] == 0)
+					GameState->Mode = GameMode_OptionMenu;
+				}
+
+				if(!IsNullV2i(PlayerIntent))
+				{
+					v2i PlayerIntendedTile = GameState->Dormin.WorldTile + PlayerIntent;
+					v2i BowIntendedTile = PlayerIntendedTile + PlayerIntent;
+					if(GetStaticWorldTileValue(GameState->StaticWorld, PlayerIntendedTile) == 0 &&
+							GetStaticWorldTileValue(GameState->StaticWorld, BowIntendedTile) == 0)
 					{
-						GameState->Dormin.WorldTile = PlayerIntendedP;
+						GameState->Dormin.WorldTile = PlayerIntendedTile;
 						if(!IsNullV2i(PlayerIntent))
 						{
 							GameState->Dormin.BowDir = GetDirectionFromV2i(PlayerIntent);
@@ -602,7 +675,6 @@ GameUpdateAndRender(game_memory* Memory,
 
 						// NOTE(hugo): Checking if standing on an arrow
 						// {
-#define INVALID_ARROW_INDEX 0xFF
 						u8 OnArrowIndex = INVALID_ARROW_INDEX;
 						for(u8 ArrowIndex = 0; ArrowIndex < GameState->WorldDynamics.ArrowInWorldCount; ++ArrowIndex)
 						{
@@ -617,29 +689,91 @@ GameUpdateAndRender(game_memory* Memory,
 							DeleteWorldDynamicsArrow(&GameState->WorldDynamics, OnArrowIndex);
 						}
 						// }
+
+						// TODO(hugo): Not thrilled about calling this in
+						// differente places
+						StepWorld(GameState);
 					}
-				} break;
-			case PlayerMode_Aiming:
+				}
+			} break;
+		case DorminMode_Aiming:
+			{
+				if(KeyPressed(Input, SCANCODE_ESCAPE))
 				{
-					if(!IsNullV2i(PlayerIntent))
+					ResetAimingMode(&GameState->Dormin);
+					StepWorld(GameState);
+				}
+
+				if(!IsNullV2i(PlayerIntent))
+				{
+					direction AimingDir = GetDirectionFromV2i(PlayerIntent);
+					if(AimingDir == GameState->Dormin.BowDir)
 					{
-						direction AimingDir = GetDirectionFromV2i(PlayerIntent);
-						if(AimingDir == GameState->Dormin.BowDir)
+						u8 MaxAimLength = 5;
+						u8 TargetLength = MinU8(MaxAimLength, GameState->Dormin.AimLength + 1);
+						v2i TargetWorldTile = GetTileFromDirLength(GameState->Dormin.WorldTile,
+								GameState->Dormin.BowDir, TargetLength);
+						if(GetStaticWorldTileValue(GameState->StaticWorld, TargetWorldTile) == 0)
 						{
-							u8 MaxAimLength = 5;
-							GameState->Dormin.AimLength = MinU8(MaxAimLength, GameState->Dormin.AimLength + 1);
-						}
-						else
-						{
-							GameState->Dormin.AimLength = 1;
-							GameState->Dormin.BowDir = AimingDir;
+							GameState->Dormin.AimLength = TargetLength;
 						}
 					}
-				} break;
-			InvalidDefaultCase;
-		}
+					else
+					{
+						GameState->Dormin.AimLength = 1;
+						GameState->Dormin.BowDir = AimingDir;
+					}
+
+					StepWorld(GameState);
+				}
+			} break;
+		InvalidDefaultCase;
+	}
+}
+
+internal void
+InitWorldDynamicObjects(world_dynamic_objects* Dynamics)
+{
+	Dynamics->Boss.WorldTile = V2i(3, 3);
+	Dynamics->Boss.LifePoints = GlobalWindowTileCountX;
+}
+
+internal void
+GameUpdateAndRender(game_memory* Memory,
+		game_input* Input, SDL_Renderer* Renderer)
+{
+	Assert(sizeof(game_state) <= Memory->StorageSize);
+	game_state* GameState = (game_state *)Memory->Storage;
+
+	if(!GameState->IsInitialised)
+	{
+		bitmap Bitmap = LoadBitmap(DATA_FOLDER("Bisasam_16x16.png"));
+		GameState->BitmapTexture = SDLCreateTextureFromBitmap(Renderer, Bitmap);
+
+		GameState->Dormin = InitDormin();
+		CreateStaticWorld(GameState->StaticWorld);
+		GameState->Mode = GameMode_Rogue;
+
+		InitWorldDynamicObjects(&GameState->WorldDynamics);
+
+		GameState->IsInitialised = true;
 	}
 
+	switch(GameState->Mode)
+	{
+		case GameMode_Rogue:
+			{
+				UpdateRogueMode(Input, GameState);
+			} break;
+		case GameMode_OptionMenu:
+			{
+				if(KeyPressed(Input, SCANCODE_ESCAPE))
+				{
+					GameState->Mode = GameMode_Rogue;
+				}
+			} break;
+		InvalidDefaultCase;
+	}
 
 	GameRender(Renderer, GameState);
 }
