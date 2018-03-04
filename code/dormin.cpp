@@ -2,6 +2,9 @@
 
 #define DATA_FOLDER(Path) "../data/" Path
 #define INVALID_ARROW_INDEX 0xFF
+#define STATIC_WORLD_WIDTH GlobalWindowTileCountX
+#define STATIC_WORLD_HEIGHT (GlobalWindowTileCountY - 2)
+#define MAX_U32 0xFFFFFFFF
 
 /* TODO(hugo)
 
@@ -68,13 +71,8 @@ struct dormin
 	dormin_mode Mode;
 };
 
-#define TEST_BOSS_LENGTH 10
-struct test_boss
-{
-	v2i WorldTiles[TEST_BOSS_LENGTH];
-	u8 LifePoints;
-	direction Dir;
-};
+#include "dormin_pathfinding.h"
+#include "dormin_boss.h"
 
 struct world_dynamic_objects
 {
@@ -91,7 +89,7 @@ struct game_state
 {
 	SDL_Texture* BitmapTexture;
 
-	u8 StaticWorld[32 * 32];
+	u8 StaticWorld[STATIC_WORLD_WIDTH * STATIC_WORLD_HEIGHT];
 	world_dynamic_objects WorldDynamics;
 
 	dormin Dormin;
@@ -106,14 +104,14 @@ internal void
 CreateStaticWorld(u8* World,
 		random_series* WorldGenEntropy)
 {
-	for(u32 WorldY = 0; WorldY < 32; ++WorldY)
+	for(u32 WorldY = 0; WorldY < STATIC_WORLD_HEIGHT; ++WorldY)
 	{
-		for(u32 WorldX = 0; WorldX < 32; ++WorldX)
+		for(u32 WorldX = 0; WorldX < STATIC_WORLD_WIDTH; ++WorldX)
 		{
-			u8* WorldTile = World + (WorldX + 32 * WorldY);
+			u8* WorldTile = World + (WorldX + STATIC_WORLD_WIDTH * WorldY);
 			*WorldTile = 0;
-			if(WorldX == 0 || WorldX == 31 ||
-					WorldY == 0 || WorldY == 31)
+			if(WorldX == 0 || WorldX == (STATIC_WORLD_WIDTH - 1) ||
+					WorldY == 0 || WorldY == (STATIC_WORLD_HEIGHT - 1))
 			{
 				*WorldTile = 1;
 			}
@@ -132,11 +130,11 @@ CreateStaticWorld(u8* World,
 internal void
 RenderStaticWorld(SDL_Renderer* Renderer, u8* World)
 {
-	for(u32 WorldY = 0; WorldY < 32; ++WorldY)
+	for(u32 WorldY = 0; WorldY < STATIC_WORLD_HEIGHT; ++WorldY)
 	{
-		for(u32 WorldX = 0; WorldX < 32; ++WorldX)
+		for(u32 WorldX = 0; WorldX < STATIC_WORLD_WIDTH; ++WorldX)
 		{
-			u8 WorldTile = World[WorldX + WorldY * 32];
+			u8 WorldTile = World[WorldX + WorldY * STATIC_WORLD_WIDTH];
 			if(WorldTile == 1)
 			{
 				SDL_Rect WallRect = {};
@@ -442,6 +440,18 @@ GameRender(SDL_Renderer* Renderer, game_state* GameState)
 
 	{
 		test_boss* Boss = &GameState->WorldDynamics.Boss;
+
+#if 0
+		// NOTE(hugo): Debug render for pathfinding
+		// {
+		for(u32 NodeIndex = 0; NodeIndex < Boss->PathFinding.PathNodeCount; ++NodeIndex)
+		{
+			v2i WorldDestTile = Boss->PathFinding.PathNodes[NodeIndex] + V2i(0, 2);
+			SDLDrawRect(Renderer, WorldDestTile, ColorPalette_Pink);
+		}
+		//  }
+#endif
+
 		for(u8 BossTileIndex = 0; BossTileIndex < TEST_BOSS_LENGTH; ++BossTileIndex)
 		{
 			v2i BossBitmapTile = GetBitmapTileFromAscii('#');
@@ -459,6 +469,7 @@ GameRender(SDL_Renderer* Renderer, game_state* GameState)
 					GameState->WorldDynamics.Boss.WorldTiles[BossTileIndex],
 					BossBitmapTile, Color);
 		}
+
 	}
 
 	// }
@@ -585,53 +596,27 @@ ResetAimingMode(dormin* Dormin)
 inline u8
 GetStaticWorldTileValue(u8* StaticWorld, v2i Tile)
 {
-	u8 Result = StaticWorld[Tile.x + 32 * Tile.y];
+	u8 Result = StaticWorld[Tile.x + STATIC_WORLD_WIDTH * Tile.y];
 	return(Result);
 }
+
+internal v2i
+GetRandomWorldTile(random_series* Entropy)
+{
+	u32 RandomTileIndex = RandomChoice(Entropy, STATIC_WORLD_WIDTH * STATIC_WORLD_HEIGHT);
+	v2i Result = V2i(RandomTileIndex % STATIC_WORLD_WIDTH,
+			RandomTileIndex / STATIC_WORLD_WIDTH);
+
+	return(Result);
+}
+
+#include "dormin_pathfinding.cpp"
+#include "dormin_boss.cpp"
 
 internal void
 StepWorld(game_state* GameState)
 {
-	v2i FrontBossWorldTile = GameState->WorldDynamics.Boss.WorldTiles[0];
-	switch(GameState->WorldDynamics.Boss.Dir)
-	{
-		case Dir_Top:
-			{
-				if(FrontBossWorldTile.y <= 2)
-				{
-					GameState->WorldDynamics.Boss.Dir = Dir_Right;
-				}
-			} break;
-		case Dir_Right:
-			{
-				if(SafeCastToU32(FrontBossWorldTile.x) >= GlobalWindowTileCountX - 3)
-				{
-					GameState->WorldDynamics.Boss.Dir = Dir_Bottom;
-				}
-			} break;
-		case Dir_Bottom:
-			{
-				if(SafeCastToU32(FrontBossWorldTile.y) >= GlobalWindowTileCountY - 5)
-				{
-					GameState->WorldDynamics.Boss.Dir = Dir_Left;
-				}
-			} break;
-		case Dir_Left:
-			{
-				if(FrontBossWorldTile.x <= 2)
-				{
-					GameState->WorldDynamics.Boss.Dir = Dir_Top;
-				}
-			} break;
-		InvalidDefaultCase;
-	}
-
-	for(u8 TileIndex = TEST_BOSS_LENGTH - 1; TileIndex > 0; --TileIndex)
-	{
-		GameState->WorldDynamics.Boss.WorldTiles[TileIndex] =
-			GameState->WorldDynamics.Boss.WorldTiles[TileIndex - 1];
-	}
-	GameState->WorldDynamics.Boss.WorldTiles[0] += GetOffsetFromDir(GameState->WorldDynamics.Boss.Dir);
+	StepTestBoss(GameState);
 }
 
 internal void
@@ -795,11 +780,7 @@ UpdateRogueMode(game_input* Input, game_state* GameState)
 internal void
 InitWorldDynamicObjects(world_dynamic_objects* Dynamics)
 {
-	for(u8 TileIndex = 0; TileIndex < TEST_BOSS_LENGTH; ++TileIndex)
-	{
-		Dynamics->Boss.WorldTiles[TileIndex] = V2i(3 + TEST_BOSS_LENGTH - TileIndex, 3);
-	}
-	Dynamics->Boss.LifePoints = GlobalWindowTileCountX;
+	Dynamics->Boss = TestBossInit();
 }
 
 internal void
