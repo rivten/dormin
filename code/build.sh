@@ -9,7 +9,7 @@ fi
 $CTIME_EXEC -begin "$CTIME_TIMING_FILE"
 
 CommonFlags="-g -std=c++11 -Werror -Wall -Wextra -Wcast-align -Wmissing-noreturn -Wctor-dtor-privacy -Wdisabled-optimization -Wformat=2 -Winit-self -Wmissing-include-dirs -Wno-old-style-cast -Woverloaded-virtual -Wredundant-decls -Wsign-promo -Wstrict-overflow=5 -Wundef -Wno-unused -Wno-variadic-macros -Wno-parentheses -fdiagnostics-show-option -Wno-write-strings -Wno-absolute-value -Wno-cast-align -Wno-unused-parameter -lm"
-CommonFlags+=" -I ../../rivten/ -I ../../stb/ -I ../../imgui/"
+# CommonFlags+=" -I ../../rivten/ -I ../../stb/ -I ../../imgui/"
 
 if [ -n "$(command -v clang++)" ]
 then

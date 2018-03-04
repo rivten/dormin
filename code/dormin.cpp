@@ -16,7 +16,6 @@
 	 * Animation (death, arrow, boss, ...)
 	 * Static world level loading
 	 * World collision for the dynamic objects (bosses)
-	 * Avoid having rivten.h and other file dependency outside of the repo (if someone else need to compile)
  
    --- BUG ---
      * When you throw an arrow against a wall, you cannot get that arrow back
