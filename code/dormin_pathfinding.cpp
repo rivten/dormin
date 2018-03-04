@@ -20,8 +20,10 @@ FindNextNodeWithMinDistance(dijkstra_node* DijkstraWorld)
 }
 
 internal pathfinding_result
-SearchPath(u8* StaticWorld, v2i Begin, v2i End)
+ComputePath(game_state* GameState, v2i Begin, v2i End)
 {
+	u8* StaticWorld = GameState->StaticWorld;
+
 	Assert(!AreEqualsV2i(Begin, End));
 
 	dijkstra_node DijkstraWorld[STATIC_WORLD_WIDTH * STATIC_WORLD_HEIGHT] = {};
@@ -35,6 +37,13 @@ SearchPath(u8* StaticWorld, v2i Begin, v2i End)
 		// NOTE(hugo): Do not consider non-available tiles by marking them
 		// already visited but with a max distance reach.
 		Node->Visited = (StaticWorld[NodeIndex] != 0);
+	}
+
+	for(u32 BossTileIndex = 1; BossTileIndex < TEST_BOSS_LENGTH; ++BossTileIndex)
+	{
+		v2i BossTile = GameState->WorldDynamics.Boss.WorldTiles[BossTileIndex];
+		dijkstra_node* BossTileNode = DijkstraWorld + BossTile.x + STATIC_WORLD_WIDTH * BossTile.y;
+		BossTileNode->Visited = true;
 	}
 
 	dijkstra_node* BeginNode = DijkstraWorld + (Begin.x + STATIC_WORLD_WIDTH * Begin.y);
@@ -111,6 +120,7 @@ SearchPath(u8* StaticWorld, v2i Begin, v2i End)
 
 	while(!AreEqualsV2i(CurrentNode->WorldTile, Begin))
 	{
+		// TODO(hugo): What to do when the end is not reachable ?
 		Assert(CurrentNode->Distance < MAX_U32);
 		Assert(CurrentNode->Visited);
 

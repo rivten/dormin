@@ -39,7 +39,7 @@ StepTestBoss(game_state* GameState)
 		Boss->CurrentPathFindingNodeIndex = 0;
 
 		v2i DestPoint = TestBossGetValidDestPoint(GameState);
-		Boss->PathFinding = SearchPath(GameState->StaticWorld, Boss->WorldTiles[0], DestPoint);
+		Boss->PathFinding = ComputePath(GameState, Boss->WorldTiles[0], DestPoint);
 	}
 	else
 	{

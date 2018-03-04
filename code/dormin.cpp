@@ -566,7 +566,7 @@ FireArrow(game_state* GameState)
 
 	if(AreEqualsV2i(ArrowWorldTile, GameState->WorldDynamics.Boss.WorldTiles[TEST_BOSS_LENGTH - 1]))
 	{
-		--GameState->WorldDynamics.Boss.LifePoints;
+		GameState->WorldDynamics.Boss.LifePoints -= 3;
 	}
 	else
 	{
@@ -622,6 +622,8 @@ StepWorld(game_state* GameState)
 internal void
 UpdateRogueMode(game_input* Input, game_state* GameState)
 {
+	bool ShouldStepWorld = false;
+
 	v2i PlayerIntent = {};
 
 	// TODO(hugo): If I press two keys in the same frame, then I crash
@@ -683,13 +685,13 @@ UpdateRogueMode(game_input* Input, game_state* GameState)
 			case DorminMode_Aiming:
 				{
 					FireArrow(GameState);
+					ShouldStepWorld = true;
 					ResetAimingMode(&GameState->Dormin);
 				} break;
 			InvalidDefaultCase;
 		}
 	}
 
-	bool ShouldStepWorld = false;
 
 	switch(GameState->Dormin.Mode)
 	{

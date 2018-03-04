@@ -33,6 +33,7 @@ const global_variable v4 ColorPalette_Pink = (1.0f / 255.0f) * V4(255.0f, 156.0f
 const global_variable v4 ColorPalette_White = (1.0f / 255.0f) * V4(239.0f, 239.0f, 239.0f, 255.0f);
 
 const global_variable v4 ColorPalette_Yellow = (1.0f / 255.0f) * V4(255.0f, 178.0f, 0.0f, 255.0f);
+const global_variable v4 ColorPalette_DeepBlue = (1.0f / 255.0f) * V4(79.0f, 93.0f, 149.0f, 255.0f);
 
 struct game_memory
 {
